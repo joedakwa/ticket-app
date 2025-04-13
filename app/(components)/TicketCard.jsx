@@ -27,7 +27,7 @@ const TicketCard = ({ticket}) => {
         <DeleteBlock id={ticket._id}/>
         </div>
         </div>
-        <Link href={`/ticket/${ticket._id}`} style={{display: "contens"}}>
+        <Link href={`/TicketPage/${ticket._id}`} style={{display: "contents"}}>
         <h4>{ticket.title}</h4>
         <hr className="h-px border-0 bg-page mb-2"/>
         <p className="whitespace-pre-wrap">{ticket.description}</p>
