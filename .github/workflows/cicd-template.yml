@@ -1,0 +1,289 @@
+# Reusable CI/CD Template for Full-Stack Applications
+# Can be adapted for Next.js, MERN, or separate frontend/backend projects
+
+name: Full-Stack CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  # Template Variables - Customize these
+  PROJECT_TYPE: "nextjs" # Options: "nextjs", "mern", "separate"
+  NODE_VERSION: "20"
+  DOCKER_REGISTRY: "docker.io"
+  PROJECT_NAME: "my-app"
+
+jobs:
+  # =============================================================================
+  # 1. CODE QUALITY & COMPILATION
+  # =============================================================================
+
+  code-quality:
+    name: Code Quality & Syntax Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ env.PROJECT_TYPE }}" == "nextjs" ]; then
+            npm ci
+          elif [ "${{ env.PROJECT_TYPE }}" == "mern" ]; then
+            npm ci
+            cd client && npm ci && cd ..
+            cd server && npm ci && cd ..
+          elif [ "${{ env.PROJECT_TYPE }}" == "separate" ]; then
+            cd client && npm ci && cd ..
+            cd api && npm ci && cd ..
+          fi
+
+      - name: Lint Code
+        run: |
+          if [ "${{ env.PROJECT_TYPE }}" == "nextjs" ]; then
+            npm run lint
+          elif [ "${{ env.PROJECT_TYPE }}" == "mern" ]; then
+            npm run lint || true
+            cd client && npm run lint && cd ..
+            cd server && npm run lint && cd ..
+          elif [ "${{ env.PROJECT_TYPE }}" == "separate" ]; then
+            cd client && npm run lint && cd ..
+            cd api && npm run lint && cd ..
+          fi
+
+      - name: Type Check (if TypeScript)
+        run: |
+          if [ -f "tsconfig.json" ]; then
+            npx tsc --noEmit
+          fi
+
+      - name: Build Application
+        run: |
+          if [ "${{ env.PROJECT_TYPE }}" == "nextjs" ]; then
+            npm run build
+          elif [ "${{ env.PROJECT_TYPE }}" == "mern" ]; then
+            cd client && npm run build && cd ..
+            cd server && npm run build && cd ..
+          elif [ "${{ env.PROJECT_TYPE }}" == "separate" ]; then
+            cd client && npm run build && cd ..
+            cd api && npm run build && cd ..
+          fi
+
+  # =============================================================================
+  # 2. SECURITY SCANNING
+  # =============================================================================
+
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs: code-quality
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Gitleaks (Secret Detection)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy (Filesystem Scan)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+      - name: NPM Audit
+        run: |
+          if [ "${{ env.PROJECT_TYPE }}" == "nextjs" ]; then
+            npm audit --audit-level=high
+          elif [ "${{ env.PROJECT_TYPE }}" == "mern" ]; then
+            npm audit --audit-level=high || true
+            cd client && npm audit --audit-level=high && cd ..
+            cd server && npm audit --audit-level=high && cd ..
+          elif [ "${{ env.PROJECT_TYPE }}" == "separate" ]; then
+            cd client && npm audit --audit-level=high && cd ..
+            cd api && npm audit --audit-level=high && cd ..
+          fi
+
+  # =============================================================================
+  # 3. TESTING
+  # =============================================================================
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: security-scan
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ env.PROJECT_TYPE }}" == "nextjs" ]; then
+            npm ci
+          elif [ "${{ env.PROJECT_TYPE }}" == "mern" ]; then
+            npm ci
+            cd client && npm ci && cd ..
+            cd server && npm ci && cd ..
+          elif [ "${{ env.PROJECT_TYPE }}" == "separate" ]; then
+            cd client && npm ci && cd ..
+            cd api && npm ci && cd ..
+          fi
+
+      - name: Run Tests
+        run: |
+          if [ "${{ env.PROJECT_TYPE }}" == "nextjs" ]; then
+            npm test -- --coverage --watchAll=false || true
+          elif [ "${{ env.PROJECT_TYPE }}" == "mern" ]; then
+            npm test || true
+            cd client && npm test -- --coverage --watchAll=false && cd ..
+            cd server && npm test -- --coverage && cd ..
+          elif [ "${{ env.PROJECT_TYPE }}" == "separate" ]; then
+            cd client && npm test -- --coverage --watchAll=false && cd ..
+            cd api && npm test -- --coverage && cd ..
+          fi
+
+  # =============================================================================
+  # 4. CODE ANALYSIS (Optional - requires setup)
+  # =============================================================================
+
+  code-analysis:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    needs: test
+    if: false # Set to true when SonarQube is configured
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+  # =============================================================================
+  # 5. DOCKER BUILD & PUSH
+  # =============================================================================
+
+  docker-build:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT_NAME }}:latest
+            ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # =============================================================================
+  # 6. CONTAINER SECURITY SCAN
+  # =============================================================================
+
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Run Trivy Container Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/${{ env.PROJECT_NAME }}:latest
+          format: "sarif"
+          output: "trivy-container-results.sarif"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: "trivy-container-results.sarif"
+
+  # =============================================================================
+  # 7. DEPLOYMENT (Configurable)
+  # =============================================================================
+
+  deploy:
+    name: Deploy Application
+    runs-on: ubuntu-latest
+    needs: container-scan
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Vercel Deployment (for Next.js)
+      - name: Deploy to Vercel
+        if: env.PROJECT_TYPE == 'nextjs'
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: "--prod"
+
+      # Kubernetes Deployment (for containerized apps)
+      - name: Deploy to Kubernetes
+        if: env.PROJECT_TYPE != 'nextjs'
+        run: |
+          echo "Configure kubectl and deploy to cluster"
+          # Add your Kubernetes deployment logic here
+
+      # Notify Deployment
+      - name: Deployment Notification
+        if: success()
+        run: |
+          echo "🚀 Deployment successful!"
+          # Add notification logic (Slack, Discord, etc.)

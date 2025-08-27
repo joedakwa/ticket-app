@@ -2,7 +2,8 @@ import TicketForm from "@/app/(components)/TicketForm";
 
 const getTicketDataById = async (id) => {
   try {
-    const res = await fetch(`http://localhost:3007/api/Tickets/${id}`, {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const res = await fetch(`${baseUrl}/api/Tickets/${id}`, {
       cache: "no-store",
     });
 

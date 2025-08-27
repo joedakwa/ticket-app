@@ -1,18 +1,27 @@
 import TicketCard from "./(components)/TicketCard";
 
+// Make this page dynamic to avoid build-time issues
+export const dynamic = 'force-dynamic';
+
 const getTickets = async () => {
   try {
-    const res = await fetch("http://localhost:3007/api/Tickets", {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const res = await fetch(`${baseUrl}/api/Tickets`, {
       cache: "no-store",
     });
+    if (!res.ok) {
+      throw new Error('Failed to fetch tickets');
+    }
     return res.json();
   } catch (err) {
     console.log("failed to get tickets", err);
+    return { tickets: [] }; // Return empty array if fetch fails
   }
 };
 
 const Dashboard = async () => {
-  const { tickets } = await getTickets();
+  const data = await getTickets();
+  const tickets = data?.tickets || [];
 
   const uniqueCategories = [
     ...new Set(tickets?.map(({ category }) => category)),
