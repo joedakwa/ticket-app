@@ -12,7 +12,8 @@ env:
 
 jobs:
   # =============================================================================
-  # 1. CODE QUALITY & BUILD
+  # 1. CODE QUALITY & BUILD use https://www.youtube.com/live/kuUHV0I0YwM as reference 
+  # for the build and test steps, timestamp 26-30 mins onwwards
   # =============================================================================
 
   build-and-test:
