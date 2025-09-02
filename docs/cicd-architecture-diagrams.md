@@ -367,6 +367,164 @@ graph TB
 
 ---
 
+## 🔧 DevOps Tooling Architecture
+
+This diagram shows how the DevOps tools integrate with your CI/CD runners and AWS infrastructure.
+
+```mermaid
+graph TB
+    subgraph "Development Environment"
+        DEV["👨‍💻 Developer"]
+        LOCAL["Local Machine<br/>• AWS CLI<br/>• kubectl<br/>• Terraform"]
+    end
+
+    subgraph "GitHub Repository"
+        CODE[Code Push]
+        WORKFLOWS["GitHub Workflows"]
+    end
+
+    subgraph "Self-Hosted EC2 Runners"
+        subgraph "Infrastructure Runner"
+            INFRA_TOOLS["🔧 Installed Tools:<br/>• AWS CLI v2<br/>• Terraform<br/>• Git<br/>• Docker"]
+        end
+
+        subgraph "Deploy Runner"
+            DEPLOY_TOOLS["🔧 Installed Tools:<br/>• AWS CLI v2<br/>• kubectl<br/>• eksctl<br/>• Helm<br/>• Git<br/>• Docker"]
+        end
+
+        subgraph "Heavy/GPU Runner"
+            GPU_TOOLS["🔧 Installed Tools:<br/>• Docker + GPU<br/>• NVIDIA Drivers<br/>• Python/ML Libraries<br/>• AWS CLI v2"]
+        end
+    end
+
+    subgraph "AWS Infrastructure"
+        subgraph "EKS Cluster"
+            EKS_ADDONS["📦 Add-ons:<br/>• EBS CSI Driver<br/>• NGINX Ingress<br/>• cert-manager<br/>• OIDC Provider"]
+            WORKLOADS["Application Workloads"]
+        end
+
+        subgraph "Supporting Services"
+            ECR["ECR Registry"]
+            EBS["EBS Volumes"]
+            ALB["Application Load Balancer"]
+            ACM["AWS Certificate Manager"]
+        end
+    end
+
+    subgraph "External Services"
+        LETSENCRYPT["Let's Encrypt<br/>(via cert-manager)"]
+        DOCKER_HUB["Docker Hub"]
+    end
+
+    %% Connections
+    DEV --> LOCAL
+    LOCAL --> CODE
+    CODE --> WORKFLOWS
+
+    WORKFLOWS --> INFRA_TOOLS
+    WORKFLOWS --> DEPLOY_TOOLS
+    WORKFLOWS --> GPU_TOOLS
+
+    INFRA_TOOLS --> EKS_ADDONS
+    INFRA_TOOLS --> ECR
+    INFRA_TOOLS --> EBS
+
+    DEPLOY_TOOLS --> WORKLOADS
+    DEPLOY_TOOLS --> EKS_ADDONS
+
+    GPU_TOOLS --> ECR
+    GPU_TOOLS --> DOCKER_HUB
+
+    EKS_ADDONS --> EBS
+    EKS_ADDONS --> ALB
+    EKS_ADDONS --> LETSENCRYPT
+    EKS_ADDONS --> ACM
+
+    %% Styling
+    classDef dev fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef github fill:#2ea043,stroke:#1a7f37,stroke-width:2px,color:#fff
+    classDef runner fill:#fb8500,stroke:#d62d20,stroke-width:2px,color:#fff
+    classDef aws fill:#ff9900,stroke:#cc7a00,stroke-width:2px,color:#fff
+    classDef external fill:#6366f1,stroke:#4f46e5,stroke-width:2px,color:#fff
+
+    class DEV,LOCAL dev
+    class CODE,WORKFLOWS github
+    class INFRA_TOOLS,DEPLOY_TOOLS,GPU_TOOLS runner
+    class EKS_ADDONS,WORKLOADS,ECR,EBS,ALB,ACM aws
+    class LETSENCRYPT,DOCKER_HUB external
+```
+
+---
+
+## 🛠️ Tool Installation Flow
+
+This shows the sequence of setting up your DevOps environment:
+
+```mermaid
+graph TD
+    START[Start Setup] --> AWS_CLI[Install AWS CLI v2]
+    AWS_CLI --> AWS_CONFIG[Configure AWS Credentials]
+    AWS_CONFIG --> TERRAFORM[Install Terraform]
+    TERRAFORM --> KUBECTL[Install kubectl]
+    KUBECTL --> EKSCTL[Install eksctl]
+    EKSCTL --> EKS_CONFIG[Configure EKS Access]
+
+    EKS_CONFIG --> OIDC[Associate OIDC Provider]
+    OIDC --> EBS_SA[Create EBS CSI Service Account]
+    EBS_SA --> EBS_DRIVER[Deploy EBS CSI Driver]
+    EBS_DRIVER --> NGINX[Deploy NGINX Ingress]
+    NGINX --> CERT_MANAGER[Deploy cert-manager]
+    CERT_MANAGER --> RUNNER_SETUP[Setup GitHub Runners]
+    RUNNER_SETUP --> COMPLETE[✅ Setup Complete]
+
+    %% Styling
+    classDef setup fill:#e8f5e8,stroke:#2d5a2d,stroke-width:2px
+    classDef aws fill:#ff9900,stroke:#cc7a00,stroke-width:2px,color:#fff
+    classDef k8s fill:#326ce5,stroke:#1a4480,stroke-width:2px,color:#fff
+    classDef complete fill:#d4edda,stroke:#155724,stroke-width:2px
+
+    class START,AWS_CONFIG,EKS_CONFIG setup
+    class AWS_CLI,TERRAFORM,OIDC,EBS_SA aws
+    class KUBECTL,EKSCTL,EBS_DRIVER,NGINX,CERT_MANAGER k8s
+    class RUNNER_SETUP,COMPLETE complete
+```
+
+---
+
+## 🔄 CI/CD Pipeline with Tooling Integration
+
+This shows how the tools work together in your CI/CD pipeline:
+
+```mermaid
+sequenceDiagram
+    participant Dev as 👨‍💻 Developer
+    participant GH as GitHub
+    participant IR as Infrastructure Runner
+    participant DR as Deploy Runner
+    participant EKS as EKS Cluster
+
+    Dev->>GH: Push code changes
+    GH->>IR: Trigger infrastructure job
+
+    Note over IR: Tools: AWS CLI, Terraform
+    IR->>IR: terraform plan
+    IR->>IR: terraform apply
+    IR->>EKS: Provision/Update infrastructure
+
+    GH->>DR: Trigger deployment job
+
+    Note over DR: Tools: kubectl, eksctl, helm
+    DR->>DR: aws eks update-kubeconfig
+    DR->>DR: kubectl apply -f k8s/
+    DR->>EKS: Deploy applications
+
+    EKS->>DR: Deployment status
+    DR->>GH: Report success
+    GH->>Dev: Notify completion
+```
+
+---
+
 ## 📋 How to View These Diagrams
 
 ### Option 1: GitHub (Recommended)
